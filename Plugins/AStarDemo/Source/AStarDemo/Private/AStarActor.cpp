@@ -42,7 +42,7 @@ AAStarActor::AAStarActor()
 	//SetRootComponent(SceneLayout);
 
 
-	placeActors(density);
+	//placeActors(density);
 }
 
 void AAStarActor::PostInitProperties()
@@ -53,11 +53,12 @@ void AAStarActor::PostInitProperties()
 
 bool AAStarActor::generateMap(int32 v_density)
 {
+	storedMap.Empty();
 	for (int32 x = 0; x < 30; ++x) {
 		for (int32 y = 0; y < 30; ++y) {
 			FHitResult HitResult;
-			FVector Start = { (float(x) - 15) * 50, (float(y) - 15) * 50, 500};
-			FVector End = { (float(x) - 15) * 50, (float(y) - 15) * 50, -100 };
+			FVector Start = { (float(x) - 15) * 50, (float(y) - 15) * 50, 300};
+			FVector End = { (float(x) - 15) * 50, (float(y) - 15) * 50, 50 };
 			FCollisionQueryParams fcqp;
 			fcqp.bTraceComplex = true;
 			FCollisionResponseParams fcrp;
@@ -65,16 +66,17 @@ bool AAStarActor::generateMap(int32 v_density)
 			fcoqp.AddObjectTypesToQuery(ECollisionChannel::ECC_WorldDynamic);
 			fcoqp.AddObjectTypesToQuery(ECollisionChannel::ECC_WorldStatic);
 			if (!GetWorld()->LineTraceSingleByObjectType(HitResult, Start, End, fcoqp,fcqp)) {
-				DrawDebugPoint(GetWorld(), Start, 10, FColor(1, 1, 0, 0), true, 360);
+			//	DrawDebugPoint(GetWorld(), Start, 10, FColor(1, 1, 0, 0), true, 360);
 			}
-			DrawDebugLine(
-				GetWorld(),
-				Start,
-				HitResult.bBlockingHit?HitResult.Location:End,
-				FColor(255, 0, 0),
-				false, 360, 0,
-				6.333
-			);
+		//	DrawDebugLine(
+		//		GetWorld(),
+		//		Start,
+		//		HitResult.bBlockingHit?HitResult.Location:End,
+		//		FColor(255, 0, 0),
+		//		false, 360, 0,
+		//		.5
+		//	);
+			storedMap.Add(FVector(Start.X, Start.Y, HitResult.bBlockingHit ? -1 : 0));
 			
 		}
 	}
@@ -111,12 +113,46 @@ bool AAStarActor::placeActors(int32 v_density)
 	return false;
 }
 
+void AAStarActor::drawPath(TArray<FVector> path)
+{
+	for (int i = 0; i < path.Num()-1; ++i) {
+		UE_LOG(LogTemp, Warning, TEXT("%i: %x, %y"),i,path[i].X,path[i].Y);
+		DrawDebugLine(GetWorld(),
+			FVector(path[i].X,path[i].Y,10),
+			FVector(path[i+1].X, path[i+1].Y, 10),
+			FColor(0,255,0),
+			true, 360,'\000', 20
+			);
+	}
+}
+
 // Called when the game starts or when spawned
 void AAStarActor::BeginPlay()
 {
 	Super::BeginPlay();
 
 	generateMap(density);
+	FVector start = FVector(-1, -1, -1);// storedMap[FMath::RandRange(0, storedMap.Num() - 1)];
+	FVector end = FVector(-1, -1, -1);//storedMap[FMath::RandRange(0, storedMap.Num() - 1)];
+	while (start.Z == -1) {
+		start = storedMap[FMath::RandRange(0, storedMap.Num() - 1)];
+	}
+	while (end.Z == -1) {
+		end = storedMap[FMath::RandRange(0, storedMap.Num() - 1)];
+	}
+
+	DrawDebugPoint(GetWorld(),
+		FVector(start.X, start.Y, 10),50,
+		FColor(0, 255, 0),
+		true, 360);
+	DrawDebugPoint(GetWorld(),
+		FVector(end.X, end.Y, 10), 50,
+		FColor(255, 0, 150),
+		true, 360);
+	TArray<FVector> t_path = f_solvePath(storedMap, 30, start, end);
+	drawPath(t_path);
+
+	int32 i = 0;
 }
 
 // Called every frame
@@ -154,3 +190,181 @@ void AAStarActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedE
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 }
 #endif
+
+
+TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth, FVector start, FVector end, int32 max_cycles) {
+
+	int32 startindx = -1;
+	points.Find(start, startindx);
+	FStarNode firstNode(true, start, nullptr, startindx,-1,0);
+	firstNode.cost = 0;
+	firstNode.dist = 0;
+	firstNode.total = 0;
+	TArray<FStarNode> nodes;
+	TArray<FStarNode*> openNodes, closedNodes;
+	nodes.Add(firstNode);
+	openNodes.Add(&nodes[0]);
+	// openList
+	// closedList
+
+
+	//startNode
+	for (int32 m_c = 0; openNodes.Num() > 0 && m_c < max_cycles;++m_c) {
+		FStarNode* curNode = openNodes[0];
+		int32 curIndx = 0;
+		for (int32 i = 0; i < openNodes.Num(); ++i) {//find the cheapest costing node
+			if (openNodes[i]->total < curNode->total) {
+				curNode = openNodes[i];
+				curIndx = i;
+			}
+		}
+		openNodes.RemoveAt(curIndx);
+		closedNodes.Add(curNode);
+		
+		DrawDebugPoint(GetWorld(),
+			FVector(curNode->position.X, curNode->position.Y, 50), 5,
+			FColor(255*float(m_c)/50, 0, 0),
+			true, 360);
+
+
+		if (curNode->position == end) {
+			//make path and return :)
+			TArray<FVector> returnPath;
+			while (curNode->parent_id>=0) {
+				returnPath.Insert(curNode->position,0);
+				curNode = &nodes[curNode->parent_id];
+			}//do one last time as the root node location wont be added
+			return returnPath;
+		}
+		TArray<FStarNode> childNodes;
+
+		for (int i = 0; i < 8; ++i) { // do for each neighboring spot
+			//check if the spot is valid
+			/*
+			012
+			3X4
+			567
+
+			-x	: []-1
+			+x	: []+1
+			-y	: []-width
+			+y	: []+width
+
+			*/
+			FVector newNodePos;
+			int32 newNodeIndx = -1;
+			switch (i) {
+			case 0:
+				newNodeIndx = curNode->map_id - 1 - mapWidth;
+				break;
+			case 1:
+				newNodeIndx = curNode->map_id - mapWidth;
+				break;
+			case 2:
+				newNodeIndx = curNode->map_id + 1 - mapWidth;
+				break;
+			case 3:
+				newNodeIndx = curNode->map_id - 1;
+				break;
+			case 4:
+				newNodeIndx = curNode->map_id + 1;
+				break;
+			case 5:
+				newNodeIndx = curNode->map_id - 1 + mapWidth;
+				break;
+			case 6:
+				newNodeIndx = curNode->map_id + mapWidth;
+				break;
+			case 7:
+				newNodeIndx = curNode->map_id +1+ mapWidth;
+				break;
+			}
+			if (!points.IsValidIndex(newNodeIndx)) { //check if its a valid index before continuing;
+				continue;
+			}
+			if (points[newNodeIndx].Z == -1)//as this will be for a 2d map, we can use the Z variable to store if its walkable---
+				continue;
+			newNodePos = points[newNodeIndx];
+
+
+			UE_LOG(LogTemp, Log, TEXT("%d: (%f, %f) -> (%f, %f)"), i, curNode->position.X, curNode->position.Y, newNodePos.X, newNodePos.Y);
+			FStarNode n_child(false, points[newNodeIndx], curNode,newNodeIndx, curNode->node_id,-1);
+			childNodes.Add(n_child);
+
+
+		}
+
+		for (int32 c = 0; c < childNodes.Num(); ++c) {
+			bool skip = false;
+			for (int32 i = 0; i < closedNodes.Num(); ++i) {
+				if (childNodes[c].map_id == closedNodes[i]->map_id) {// we dont want duplicates
+					skip = true;
+				}
+			}
+
+			for (int32 i = 0; i < openNodes.Num(); ++i) {
+				if (childNodes[c].map_id == openNodes[i]->map_id) {// we dont want duplicates
+					skip = true;
+				}
+			}
+			if (!skip) {
+				childNodes[c].cost = curNode->cost + 1;
+				childNodes[c].dist =
+					abs((end.X - childNodes[c].position.X) / 2) + 
+					abs((end.Y - childNodes[c].position.Y) / 2);
+				childNodes[c].total = childNodes[c].cost + childNodes[c].dist;
+
+				int32 t_indx = nodes.Add(childNodes[c]);
+				nodes[t_indx].node_id = t_indx;
+				openNodes.Add(&nodes[t_indx]);
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+	}
+	//while !openList.Size()==0
+
+		//cnode = min(f)
+		//rem cn openlist
+		//add cn to closelist
+
+		// if cn == target
+			//retrace path
+
+
+
+
+
+
+	return TArray<FVector>();
+}
+
+
+
+
+
+
+FStarNode::FStarNode(bool v_rootNode, FVector v_position, FStarNode* v_pNode,int32 _id, int32 p_id, int32 s_id)
+{
+	rootNode = v_rootNode;
+	map_id = _id;
+	parent_id = p_id;
+	node_id = s_id;
+	if (!rootNode) {
+		position = v_position;
+		parentNode = v_pNode;
+	}
+	else {
+		position = v_position;
+		parentNode = nullptr;
+	}
+}
