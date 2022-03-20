@@ -45,7 +45,7 @@ public:
 	TArray<FVector> findPath(FVector2D start, FVector2D target); //solve for the best path
 	void drawPath(TArray<FVector> path); //debug draw the map
 
-	TArray<FVector> f_solvePath(TArray<FVector> points, int32 mapWidth, FVector start, FVector end, int32 max_cycles = 9999);
+	TArray<FVector> f_solvePath(TArray<FVector> points, int32 mapWidth, FVector start, FVector end, int32 max_cycles = 9999, int32 tile_distance = 50);
 
 
 	TArray<FVector> storedMap;

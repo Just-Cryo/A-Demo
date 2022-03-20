@@ -116,13 +116,17 @@ bool AAStarActor::placeActors(int32 v_density)
 void AAStarActor::drawPath(TArray<FVector> path)
 {
 	for (int i = 0; i < path.Num()-1; ++i) {
-		UE_LOG(LogTemp, Warning, TEXT("%i: %x, %y"),i,path[i].X,path[i].Y);
+		//UE_LOG(LogTemp, Warning, TEXT("%i: %x, %y"),i,path[i].X,path[i].Y);
 		DrawDebugLine(GetWorld(),
 			FVector(path[i].X,path[i].Y,10),
 			FVector(path[i+1].X, path[i+1].Y, 10),
 			FColor(0,255,0),
 			true, 360,'\000', 20
 			);
+		DrawDebugPoint(GetWorld(),
+			FVector(path[i].X, path[i].Y, 10), 25,
+			FColor(150, 150, 0),
+			true, 360);
 	}
 }
 
@@ -132,6 +136,9 @@ void AAStarActor::BeginPlay()
 	Super::BeginPlay();
 
 	generateMap(density);
+	for (int i = 0; i < storedMap.Num();++i) {
+		UE_LOG(LogTemp, Log, TEXT("%d: (%f, %f, %f)"), i, storedMap[i].X, storedMap[i].Y, storedMap[i].Z);
+	}
 	FVector start = FVector(-1, -1, -1);// storedMap[FMath::RandRange(0, storedMap.Num() - 1)];
 	FVector end = FVector(-1, -1, -1);//storedMap[FMath::RandRange(0, storedMap.Num() - 1)];
 	while (start.Z == -1) {
@@ -192,14 +199,14 @@ void AAStarActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedE
 #endif
 
 
-TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth, FVector start, FVector end, int32 max_cycles) {
+TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth, FVector start, FVector end, int32 max_cycles, int32 tile_distance) {
 
 	int32 startindx = -1;
 	points.Find(start, startindx);
 	FStarNode firstNode(true, start, nullptr, startindx,-1,0);
 	firstNode.cost = 0;
-	firstNode.dist = 0;
-	firstNode.total = 0;
+	firstNode.dist = FVector::Dist(end, start) / tile_distance;
+	firstNode.total = firstNode.dist;
 	TArray<FStarNode> nodes;
 	TArray<FStarNode*> openNodes, closedNodes;
 	nodes.Add(firstNode);
@@ -223,7 +230,7 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 		
 		DrawDebugPoint(GetWorld(),
 			FVector(curNode->position.X, curNode->position.Y, 50), 5,
-			FColor(255*float(m_c)/50, 0, 0),
+			FColor(0*float(m_c)/ max_cycles, curNode->dist*0, curNode->cost),
 			true, 360);
 
 
@@ -231,6 +238,7 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 			//make path and return :)
 			TArray<FVector> returnPath;
 			while (curNode->parent_id>=0) {
+				UE_LOG(LogTemp, Warning, TEXT("%i: (%f, %f) -> %f"), curNode->node_id, curNode->position.X, curNode->position.Y, curNode->parent_id);
 				returnPath.Insert(curNode->position,0);
 				curNode = &nodes[curNode->parent_id];
 			}//do one last time as the root node location wont be added
@@ -279,17 +287,21 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 				newNodeIndx = curNode->map_id +1+ mapWidth;
 				break;
 			}
-			if (!points.IsValidIndex(newNodeIndx)) { //check if its a valid index before continuing;
-				continue;
+			if (points.IsValidIndex(newNodeIndx)) { //check if its a valid index before continuing;
+				if (points[newNodeIndx].Z != -1) {
+					newNodePos = points[newNodeIndx]; 
+
+					//UE_LOG(LogTemp, Log, TEXT("%d: (%f, %f) -> (%f, %f)"), i, curNode->position.X, curNode->position.Y, newNodePos.X, newNodePos.Y);
+					FStarNode n_child(false, points[newNodeIndx], curNode, newNodeIndx, curNode->node_id, -1);
+					childNodes.Add(n_child);
+				}
 			}
-			if (points[newNodeIndx].Z == -1)//as this will be for a 2d map, we can use the Z variable to store if its walkable---
-				continue;
-			newNodePos = points[newNodeIndx];
+			//if (points[newNodeIndx].Z == -1)//as this will be for a 2d map, we can use the Z variable to store if its walkable---
+			//	continue;
+			//newNodePos = points[newNodeIndx];
 
 
-			UE_LOG(LogTemp, Log, TEXT("%d: (%f, %f) -> (%f, %f)"), i, curNode->position.X, curNode->position.Y, newNodePos.X, newNodePos.Y);
-			FStarNode n_child(false, points[newNodeIndx], curNode,newNodeIndx, curNode->node_id,-1);
-			childNodes.Add(n_child);
+			
 
 
 		}
@@ -307,11 +319,12 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 					skip = true;
 				}
 			}
+
+
+
 			if (!skip) {
 				childNodes[c].cost = curNode->cost + 1;
-				childNodes[c].dist =
-					abs((end.X - childNodes[c].position.X) / 2) + 
-					abs((end.Y - childNodes[c].position.Y) / 2);
+				childNodes[c].dist = FVector::Dist(end,childNodes[c].position) / tile_distance;
 				childNodes[c].total = childNodes[c].cost + childNodes[c].dist;
 
 				int32 t_indx = nodes.Add(childNodes[c]);
