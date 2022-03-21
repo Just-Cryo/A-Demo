@@ -77,7 +77,7 @@ bool AAStarActor::generateMap(int32 v_density)
 		//		.5
 		//	);
 			//DrawDebugPoint(GetWorld(), Start, 10, FColor(1, 1, 0, 0), true, 360);
-			DrawDebugSolidBox(GetWorld(), FVector(Start.X, Start.Y, 0), FVector(14, 14, 1), FColor((float(x)/30.0)*255, (float(y)/30.0)*255, 0), true, 360);
+			//DrawDebugSolidBox(GetWorld(), FVector(Start.X, Start.Y, 0), FVector(14, 14, 1), FColor((float(x)/30.0)*255, (float(y)/30.0)*255, 0), true, 360);
 			
 			storedMap.Add(FVector(Start.X, Start.Y, HitResult.bBlockingHit ? -1 : 0));
 			
@@ -212,45 +212,54 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 	firstNode.dist = FVector::Dist(end, start) / tile_distance;
 	firstNode.total = firstNode.dist;
 	TArray<FStarNode> nodes;
-	TArray<FStarNode*> openNodes, closedNodes;
+	TArray<int> oN, cN;
 	nodes.Add(firstNode);
-	openNodes.Add(&nodes[0]);
+	oN.Add(0);
 	// openList
 	// closedList
 
 
 	//startNode
-	for (int32 m_c = 0; openNodes.Num() > 0 && m_c < max_cycles;++m_c) {
-		FStarNode* curNode = openNodes[0];
+	for (int32 m_c = 0; oN.Num() > 0 && m_c < max_cycles;++m_c) {
+		//FStarNode* curNode = openNodes[0];
 		int32 curIndx = 0;
-		for (int32 i = 0; i < openNodes.Num(); ++i) {//find the cheapest costing node
-			if (openNodes[i]->total < curNode->total) {
-				curNode = openNodes[i];
+		for (int32 i = 0; i < oN.Num(); ++i) {//find the cheapest costing node
+			if (nodes[oN[i]].total < nodes[oN[curIndx]].total) {
+				//curNode = openNodes[i];
 				curIndx = i;
 			}
 		}
-		
+		UE_LOG(LogTemp, Warning, TEXT("%d:%d/%d (%f, %f) -> %d   [%f , %f, %f]"),
+			nodes[oN[curIndx]].node_id,
+			curIndx, oN[curIndx],
+			nodes[oN[curIndx]].position.X,
+			nodes[oN[curIndx]].position.Y,
+			nodes[oN[curIndx]].parent_id,
+			float(nodes[oN[curIndx]].cost),
+			nodes[oN[curIndx]].dist,
+			nodes[oN[curIndx]].total);
 		DrawDebugPoint(GetWorld(),
-			FVector(curNode->position.X, curNode->position.Y, 50), 5,
-			FColor(0*float(m_c)/ max_cycles, curNode->dist*0, curNode->dist >255?255:curNode->dist),
+			FVector(nodes[oN[curIndx]].position.X, nodes[oN[curIndx]].position.Y, 50), 5,
+			FColor(0*float(m_c)/ max_cycles, nodes[oN[curIndx]].dist*0, nodes[oN[curIndx]].dist >255?255: nodes[oN[curIndx]].dist),
 			true, 360);
 
 
-		if (curNode->position == end) {
+		if (nodes[oN[curIndx]].position == end) {
 			//make path and return :)
 			TArray<FVector> returnPath;
-			while (curNode->parent_id>=0) {
-				int cnid = curNode->node_id;
+			curIndx = oN[curIndx];
+			while (nodes[curIndx].parent_id>=0) {
+				//int cnid = oN[curIndx];
 				UE_LOG(LogTemp, Warning, TEXT("%d: (%f, %f) -> %d   [%f , %f, %f]"), 
-					nodes[cnid].node_id,
-					nodes[cnid].position.X,
-					nodes[cnid].position.Y,
-					nodes[cnid].parent_id,
-					float(nodes[cnid].cost),
-					nodes[cnid].dist,
-					nodes[cnid].total);
-				returnPath.Insert(curNode->position,0);
-				curNode = &nodes[curNode->parent_id];
+					nodes[curIndx].node_id,
+					nodes[curIndx].position.X,
+					nodes[curIndx].position.Y,
+					nodes[curIndx].parent_id,
+					float(nodes[curIndx].cost),
+					nodes[curIndx].dist,
+					nodes[curIndx].total);
+				returnPath.Insert(nodes[curIndx].position,0);
+				curIndx = nodes[curIndx].parent_id;
 			}//do one last time as the root node location wont be added
 			return returnPath;
 		}
@@ -273,49 +282,49 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 			int newNodeIndx = -1;
 			switch (i) {
 			case 0:
-				if (curNode->map_id % mapWidth != 0)
-					newNodeIndx = curNode->map_id - 1 - mapWidth;
+				if (nodes[oN[curIndx]].map_id % mapWidth != 0)
+					newNodeIndx = nodes[oN[curIndx]].map_id - 1 - mapWidth;
 				break;
 			case 1:
-				newNodeIndx = curNode->map_id - mapWidth;
+				newNodeIndx = nodes[oN[curIndx]].map_id - mapWidth;
 				break;
 			case 2:
-				if (curNode->map_id % mapWidth != mapWidth-1)
-				newNodeIndx = curNode->map_id + 1 - mapWidth;
+				if (nodes[oN[curIndx]].map_id % mapWidth != mapWidth-1)
+				newNodeIndx = nodes[oN[curIndx]].map_id + 1 - mapWidth;
 				break;
 			case 3:
-				if (curNode->map_id % mapWidth != 0)
-				newNodeIndx = curNode->map_id - 1;
+				if (nodes[oN[curIndx]].map_id % mapWidth != 0)
+				newNodeIndx = nodes[oN[curIndx]].map_id - 1;
 				break;
 			case 4:
-				if (curNode->map_id % mapWidth != mapWidth - 1)
-				newNodeIndx = curNode->map_id + 1;
+				if (nodes[oN[curIndx]].map_id % mapWidth != mapWidth - 1)
+				newNodeIndx = nodes[oN[curIndx]].map_id + 1;
 				break;
 			case 5:
-				if (curNode->map_id % mapWidth != 0)
-					newNodeIndx = curNode->map_id - 1 + mapWidth;
+				if (nodes[oN[curIndx]].map_id % mapWidth != 0)
+					newNodeIndx = nodes[oN[curIndx]].map_id - 1 + mapWidth;
 				break;
 			case 6:
-				newNodeIndx = curNode->map_id + mapWidth;
+				newNodeIndx = nodes[oN[curIndx]].map_id + mapWidth;
 				break;
 			case 7:
 
-				if (curNode->map_id % mapWidth != mapWidth - 1)
-				newNodeIndx = curNode->map_id +1+ mapWidth;
+				if (nodes[oN[curIndx]].map_id % mapWidth != mapWidth - 1)
+				newNodeIndx = nodes[oN[curIndx]].map_id +1+ mapWidth;
 				break;
 			}
 			if (points.IsValidIndex(newNodeIndx)) { //check if its a valid index before continuing;
 				if (points[newNodeIndx].Z != -1) {
 					newNodePos = points[newNodeIndx]; 
-					if (FVector::DistXY(newNodePos, curNode->position) > 100) {
+					if (FVector::DistXY(newNodePos, nodes[oN[curIndx]].position) > 100) {
 						UE_LOG(LogTemp, Log, TEXT("BAD CHILD: %d: (%f, %f) -> (%f, %f)    |  %d - %d     ( %f / %f )"),
-							i, curNode->position.X, curNode->position.Y, newNodePos.X, newNodePos.Y,
-							newNodeIndx,curNode->map_id, points[curNode->map_id].X, points[curNode->map_id].Y
+							i, nodes[oN[curIndx]].position.X, nodes[oN[curIndx]].position.Y, newNodePos.X, newNodePos.Y,
+							newNodeIndx, nodes[oN[curIndx]].map_id, points[nodes[oN[curIndx]].map_id].X, points[nodes[oN[curIndx]].map_id].Y
 							);
 
 					}
 					//UE_LOG(LogTemp, Log, TEXT("%d: (%f, %f) -> (%f, %f)"), i, curNode->position.X, curNode->position.Y, newNodePos.X, newNodePos.Y);
-					FStarNode n_child(false, newNodePos, curNode, newNodeIndx, curNode->node_id, -1);
+					FStarNode n_child(false, newNodePos, nullptr, newNodeIndx, nodes[oN[curIndx]].node_id, -1);
 					childNodes.Add(n_child);
 				}
 			}
@@ -331,14 +340,14 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 
 		for (int32 c = 0; c < childNodes.Num(); ++c) {
 			bool skip = false;
-			for (int32 i = 0; i < closedNodes.Num(); ++i) {
-				if (childNodes[c].map_id == closedNodes[i]->map_id) {// we dont want duplicates
+			for (int32 i = 0; i < cN.Num(); ++i) {
+				if (childNodes[c].map_id == nodes[cN[i]].map_id) {// we dont want duplicates
 					skip = true;
 				}
 			}
 
-			for (int32 i = 0; i < openNodes.Num(); ++i) {
-				if (childNodes[c].map_id == openNodes[i]->map_id) {// we dont want duplicates
+			for (int32 i = 0; i < oN.Num(); ++i) {
+				if (childNodes[c].map_id == nodes[oN[i]].map_id) {// we dont want duplicates
 					skip = true;
 				}
 			}
@@ -346,14 +355,14 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 
 
 			if (!skip) {
-				childNodes[c].cost = curNode->cost + 1;
+				childNodes[c].cost = nodes[oN[curIndx]].cost + 1;
 				childNodes[c].dist = FVector::DistXY(end,childNodes[c].position) / tile_distance;
 				childNodes[c].total = childNodes[c].cost + childNodes[c].dist;
 
 				int t_indx = nodes.Add(childNodes[c]);
 				nodes[t_indx].node_id = t_indx;
 				nodes[t_indx].position = points[nodes[t_indx].map_id];
-				openNodes.Add(&nodes[t_indx]);
+				oN.Add(t_indx);
 			}
 		}
 
@@ -362,10 +371,11 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 
 
 
+		oN.RemoveAt(curIndx);
+		cN.Add(curIndx);
 
 
-		openNodes.RemoveAt(curIndx);
-		closedNodes.Add(curNode);
+
 
 
 
