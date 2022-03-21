@@ -92,7 +92,6 @@ bool AAStarActor::placeActors(int32 v_density)
 		return false;
 	for (auto& a : ObstacleList) {
 		if (a != nullptr)
-			//a->
 			a->DestroyComponent();
 	}
 	for (int32 i = 0; i < v_density; ++i) {
