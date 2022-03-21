@@ -9,15 +9,15 @@
 
 struct FStarNode {
 public:
-	FStarNode(bool v_rootNode, FVector v_position, FStarNode* v_pNode,int32 _id, int32 p_id, int32 s_id);
-	int32 cost;
-	int32 dist;
-	int32 total;
-	int32 map_id;
-	int32 node_id;
+	FStarNode(bool v_rootNode, FVector v_position, FStarNode* v_pNode,int _id, int p_id, int s_id);
+	float cost;
+	float dist;
+	float total;
+	int map_id;
+	int node_id;
 	FVector position;
 	FStarNode* parentNode;
-	int32 parent_id;
+	int parent_id;
 	bool rootNode = false;
 };
 
@@ -40,6 +40,8 @@ public:
 		int32 radius = 1000;
 	UPROPERTY(EditAnywhere, Meta = (Min = "0", Max = "500"))
 		int32 density = 10;
+	UPROPERTY(EditAnywhere)
+		bool spawnobjects = false;
 	bool generateMap(int32 v_density); //generates the map, returns true if successful
 	bool placeActors(int32 v_density); //place actors at their corresponding locations
 	TArray<FVector> findPath(FVector2D start, FVector2D target); //solve for the best path

@@ -37,8 +37,8 @@ AAStarActor::AAStarActor()
 	
 	*/
 
-	USceneComponent* SceneLayout = CreateDefaultSubobject<USceneComponent>( TEXT("SceneLayout"));
-	SceneLayout->RegisterComponent();
+	//USceneComponent* SceneLayout = CreateDefaultSubobject<USceneComponent>( TEXT("SceneLayout"));
+	//SceneLayout->RegisterComponent();
 	//SetRootComponent(SceneLayout);
 
 
@@ -76,6 +76,9 @@ bool AAStarActor::generateMap(int32 v_density)
 		//		false, 360, 0,
 		//		.5
 		//	);
+			//DrawDebugPoint(GetWorld(), Start, 10, FColor(1, 1, 0, 0), true, 360);
+			DrawDebugSolidBox(GetWorld(), FVector(Start.X, Start.Y, 0), FVector(14, 14, 1), FColor((float(x)/30.0)*255, (float(y)/30.0)*255, 0), true, 360);
+			
 			storedMap.Add(FVector(Start.X, Start.Y, HitResult.bBlockingHit ? -1 : 0));
 			
 		}
@@ -85,7 +88,8 @@ bool AAStarActor::generateMap(int32 v_density)
 
 bool AAStarActor::placeActors(int32 v_density)
 {
-
+	if (!spawnobjects)
+		return false;
 	for (auto& a : ObstacleList) {
 		if (a != nullptr)
 			//a->
@@ -225,12 +229,10 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 				curIndx = i;
 			}
 		}
-		openNodes.RemoveAt(curIndx);
-		closedNodes.Add(curNode);
 		
 		DrawDebugPoint(GetWorld(),
 			FVector(curNode->position.X, curNode->position.Y, 50), 5,
-			FColor(0*float(m_c)/ max_cycles, curNode->dist*0, curNode->cost),
+			FColor(0*float(m_c)/ max_cycles, curNode->dist*0, curNode->dist >255?255:curNode->dist),
 			true, 360);
 
 
@@ -238,7 +240,15 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 			//make path and return :)
 			TArray<FVector> returnPath;
 			while (curNode->parent_id>=0) {
-				UE_LOG(LogTemp, Warning, TEXT("%i: (%f, %f) -> %f"), curNode->node_id, curNode->position.X, curNode->position.Y, curNode->parent_id);
+				int cnid = curNode->node_id;
+				UE_LOG(LogTemp, Warning, TEXT("%d: (%f, %f) -> %d   [%f , %f, %f]"), 
+					nodes[cnid].node_id,
+					nodes[cnid].position.X,
+					nodes[cnid].position.Y,
+					nodes[cnid].parent_id,
+					float(nodes[cnid].cost),
+					nodes[cnid].dist,
+					nodes[cnid].total);
 				returnPath.Insert(curNode->position,0);
 				curNode = &nodes[curNode->parent_id];
 			}//do one last time as the root node location wont be added
@@ -260,39 +270,52 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 
 			*/
 			FVector newNodePos;
-			int32 newNodeIndx = -1;
+			int newNodeIndx = -1;
 			switch (i) {
 			case 0:
-				newNodeIndx = curNode->map_id - 1 - mapWidth;
+				if (curNode->map_id % mapWidth != 0)
+					newNodeIndx = curNode->map_id - 1 - mapWidth;
 				break;
 			case 1:
 				newNodeIndx = curNode->map_id - mapWidth;
 				break;
 			case 2:
+				if (curNode->map_id % mapWidth != mapWidth-1)
 				newNodeIndx = curNode->map_id + 1 - mapWidth;
 				break;
 			case 3:
+				if (curNode->map_id % mapWidth != 0)
 				newNodeIndx = curNode->map_id - 1;
 				break;
 			case 4:
+				if (curNode->map_id % mapWidth != mapWidth - 1)
 				newNodeIndx = curNode->map_id + 1;
 				break;
 			case 5:
-				newNodeIndx = curNode->map_id - 1 + mapWidth;
+				if (curNode->map_id % mapWidth != 0)
+					newNodeIndx = curNode->map_id - 1 + mapWidth;
 				break;
 			case 6:
 				newNodeIndx = curNode->map_id + mapWidth;
 				break;
 			case 7:
+
+				if (curNode->map_id % mapWidth != mapWidth - 1)
 				newNodeIndx = curNode->map_id +1+ mapWidth;
 				break;
 			}
 			if (points.IsValidIndex(newNodeIndx)) { //check if its a valid index before continuing;
 				if (points[newNodeIndx].Z != -1) {
 					newNodePos = points[newNodeIndx]; 
+					if (FVector::DistXY(newNodePos, curNode->position) > 100) {
+						UE_LOG(LogTemp, Log, TEXT("BAD CHILD: %d: (%f, %f) -> (%f, %f)    |  %d - %d     ( %f / %f )"),
+							i, curNode->position.X, curNode->position.Y, newNodePos.X, newNodePos.Y,
+							newNodeIndx,curNode->map_id, points[curNode->map_id].X, points[curNode->map_id].Y
+							);
 
+					}
 					//UE_LOG(LogTemp, Log, TEXT("%d: (%f, %f) -> (%f, %f)"), i, curNode->position.X, curNode->position.Y, newNodePos.X, newNodePos.Y);
-					FStarNode n_child(false, points[newNodeIndx], curNode, newNodeIndx, curNode->node_id, -1);
+					FStarNode n_child(false, newNodePos, curNode, newNodeIndx, curNode->node_id, -1);
 					childNodes.Add(n_child);
 				}
 			}
@@ -324,11 +347,12 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 
 			if (!skip) {
 				childNodes[c].cost = curNode->cost + 1;
-				childNodes[c].dist = FVector::Dist(end,childNodes[c].position) / tile_distance;
+				childNodes[c].dist = FVector::DistXY(end,childNodes[c].position) / tile_distance;
 				childNodes[c].total = childNodes[c].cost + childNodes[c].dist;
 
-				int32 t_indx = nodes.Add(childNodes[c]);
+				int t_indx = nodes.Add(childNodes[c]);
 				nodes[t_indx].node_id = t_indx;
+				nodes[t_indx].position = points[nodes[t_indx].map_id];
 				openNodes.Add(&nodes[t_indx]);
 			}
 		}
@@ -340,6 +364,8 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 
 
 
+		openNodes.RemoveAt(curIndx);
+		closedNodes.Add(curNode);
 
 
 
@@ -366,7 +392,7 @@ TArray<FVector> AAStarActor::f_solvePath(TArray<FVector> points, int32 mapWidth,
 
 
 
-FStarNode::FStarNode(bool v_rootNode, FVector v_position, FStarNode* v_pNode,int32 _id, int32 p_id, int32 s_id)
+FStarNode::FStarNode(bool v_rootNode, FVector v_position, FStarNode* v_pNode,int32 _id, int p_id, int32 s_id)
 {
 	rootNode = v_rootNode;
 	map_id = _id;
