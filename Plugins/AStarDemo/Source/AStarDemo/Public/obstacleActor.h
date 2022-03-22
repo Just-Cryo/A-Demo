@@ -10,11 +10,11 @@
  * 
  */
 UCLASS()
-class ASTARDEMO_API UobstacleActor : public UStaticMeshComponent
+class ASTARDEMO_API AobstacleActor : public AStaticMeshActor
 {
 	GENERATED_BODY()
 public:
-	UobstacleActor();
+	AobstacleActor();
 	
 
 };
